@@ -154,3 +154,31 @@ Skipped:    59 skips: 31 no 64-wide compute subgroup, 5 no VK_EXT_mesh_shader, 4
 Setup: `cmake -S runtime -B build-gpu -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=<MinGW gcc> -DCMAKE_CXX_COMPILER=<MinGW g++> -DLEONIDA_BUILD_WINDOWS_RUNTIME=OFF`, with `VULKAN_SDK` pointed at Vulkan SDK 1.4.363. No MSVC or Windows SDK, so the D3D12-side runtime and its tests are not built; `build.py` and `check.py` were not run. This is the first Pascal entry: wave64 and mesh shader cases skip (no 64-wide subgroup, no mesh shaders, no barycentric).
 
 The two `cs_imgload_*_tfe` failures track #31 and are deterministic (identical signature on the 780M and Intel MTL records), so they are not a Pascal-specific effect. `cs_w32_exec_computed` passes here (259 1028 3088 7682 512 4100 0 3), so the SHADER-1264 exec fix (#24) is on this main; only the tfe pair remains.
+
+Real shader corpus — 2026-11-24
+
+The full main shader corpus (`shaders.rpf`, v1.0.2.1) run through the translation pipeline
+(`shader_carve` → `fssm_unpack` → `shader_disasm` → `rdna2spirv`, default flags, no fallbacks)
+on the same toolchain:
+
+```
+Corpus:       shaders.rpf v1.0.2.1, 26503 carved shader containers (1 candidate rejected at carve)
+Result:       26503/26503 translated, 26503 pass spirv-val (100.000%; 0 refused, 0 failed)
+Stages:       vs 2236, ms 9282, ps 12101, gs 195, cs 2689
+Subgroup:     32-wide 2662, 64-wide 23841
+Control flow: structured 23213, straight-line 3249, barrier-rounds 39, dispatch-loop 2
+FMA:          glsl (all)
+wave64 VS/PS/GS on 32-wide subgroups: 13405 shaders
+             tier A (exact) 5059 (37.7%), tier B (exact via idiom) 101 (0.8%),
+             tier C (not exact on 32-wide) 8245 (61.5%)
+             by stage: gs A 195; ps A 3396 / B 27 / C 7551; vs A 1468 / B 74 / C 694
+tier C reasons (a shader may have several): tainted-branch 6534, unsafe-vote-branch 6496,
+             tainted-exec 6360, cross-lane 4630, stale-scalar 3487, mask-half 759,
+             unsafe-execz-branch 583, first-lane 353, lane-id 152, waterfall-scalar 3, lane-count 1
+```
+
+On a 32-wide-subgroup GPU the 8245 tier C wave64-graphics shaders (mostly pixel shaders, 7551 of
+them) are not bit-exact: a lane count, rank, first-lane index or lane id reaches an export or
+memory in a way that changes when the wave is split across two 32-lane subgroups. That is the
+Pascal-specific exactness gap; the translation and `spirv-val` themselves are GPU-independent and
+complete (100%) for the whole corpus.

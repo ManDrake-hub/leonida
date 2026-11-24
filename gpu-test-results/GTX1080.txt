@@ -31,3 +31,10 @@ Notes:
 - The tfe failures are #31; they are deterministic (identical signature on the 780M and
   Intel MTL records), so not a Pascal-specific effect. cs_w32_exec_computed passes here
   (259 1028 3088 7682 512 4100 0 3), so the SHADER-1264 exec fix (#24) is on this main.
+- Real shader corpus (shaders.rpf v1.0.2.1, 26503 containers): full translation pipeline
+  (carve -> unpack -> disasm -> rdna2spirv, default flags, no fallbacks) gives 26503/26503
+  translated and pass spirv-val (100.000%; 0 refused, 0 failed). wave64 VS/PS/GS on 32-wide
+  subgroups: 13405 shaders = tier A 5059 (exact) / tier B 101 (exact via idiom) / tier C
+  8245 (not exact on 32-wide); by stage gs A 195, ps A 3396 / B 27 / C 7551, vs A 1468 /
+  B 74 / C 694. The 8245 tier C (mostly pixel shaders, 7551) are the Pascal-specific
+  non-bit-exact wave64 set.
